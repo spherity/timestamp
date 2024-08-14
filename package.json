@@ -1,0 +1,53 @@
+{
+  "name": "@spherity/timestamp",
+  "version": "1.0.0",
+  "description": "A library to create timestamps with merkle trees and the ERC-7506 trusted hint registry",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
+  "files": [
+    "index.ts",
+    "/dist"
+  ],
+  "exports": {
+    "require": {
+      "types": "./dist/index.d.cts",
+      "default": "./dist/index.cjs"
+    },
+    "import": {
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "scripts": {
+    "build": "pkgroll",
+    "test": "vitest run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/spherity/timestamp.git"
+  },
+  "keywords": [
+    "erc-7506",
+    "trusted-hint",
+    "timestamp",
+    "merkle-tree"
+  ],
+  "author": "Philipp Bolte (Spherity)",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/spherity/timestamp/issues"
+  },
+  "homepage": "https://github.com/spherity/timestamp#readme",
+  "devDependencies": {
+    "pkgroll": "^2.4.2",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  },
+  "dependencies": {
+    "@openzeppelin/merkle-tree": "^1.0.7",
+    "@spherity/trusted-hint-registry": "^1.0.3",
+    "ethers": "^6.13.2"
+  }
+}
