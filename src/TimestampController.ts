@@ -1,13 +1,14 @@
 import { Contract, Signer, Provider } from 'ethers';
 import { StandardMerkleTree } from '@openzeppelin/merkle-tree';
 import { TRUSTED_HINT_REGISTRY_ABI } from '@spherity/trusted-hint-registry';
+import { TypedContract } from "ethers-abitype";
 
 export type ProviderOrSigner = Signer | Provider;
 
 export class TimestampController {
   private provider: Provider;
   private signer?: Signer;
-  private contract: Contract;
+  private contract: TypedContract<typeof TRUSTED_HINT_REGISTRY_ABI>;
   private merkleTree?: StandardMerkleTree<string[]>;
   private root?: string;
 
@@ -34,9 +35,17 @@ export class TimestampController {
       contractAddress,
       TRUSTED_HINT_REGISTRY_ABI,
       this.signer || this.provider
-    );
+    ) as unknown as TypedContract<typeof TRUSTED_HINT_REGISTRY_ABI>;
 
     this.merkleTree = StandardMerkleTree.of(data.map(x => [x]), dataEncoding);
     this.root = this.merkleTree.root;
+  }
+
+  async anchorRoot() {
+    const namespace = '0x12345678';
+    const list = '0x12345678';
+    const key = '0x12345678';
+    const value = this.root!;
+    await this.contract.setHint(namespace, list, key, value);
   }
 }
