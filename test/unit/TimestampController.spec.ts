@@ -1,4 +1,4 @@
-import { TimestampController, TimestampControllerError, HexString } from '../src/TimestampController';
+import { TimestampController, TimestampControllerError, HexString } from '../../src/TimestampController';
 import {Contract, Signer, Provider, ContractTransactionResponse} from 'ethers';
 import { StandardMerkleTree } from '@openzeppelin/merkle-tree';
 import { vi, describe, it, expect, beforeEach } from 'vitest';

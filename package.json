@@ -22,7 +22,8 @@
   },
   "scripts": {
     "build": "pkgroll",
-    "test": "vitest run"
+    "test": "vitest --config vitest-unit.config.ts run",
+    "test:integration": "vitest --config vitest-unit.config.ts run"
   },
   "repository": {
     "type": "git",
@@ -41,9 +42,11 @@
   },
   "homepage": "https://github.com/spherity/timestamp#readme",
   "devDependencies": {
+    "@viem/anvil": "^0.0.10",
     "@vitest/coverage-v8": "^2.0.5",
     "pkgroll": "^2.4.2",
     "typescript": "^5.5.4",
+    "viem": "^2.19.6",
     "vitest": "^2.0.5"
   },
   "dependencies": {
