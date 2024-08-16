@@ -41,6 +41,7 @@
   },
   "homepage": "https://github.com/spherity/timestamp#readme",
   "devDependencies": {
+    "@vitest/coverage-v8": "^2.0.5",
     "pkgroll": "^2.4.2",
     "typescript": "^5.5.4",
     "vitest": "^2.0.5"

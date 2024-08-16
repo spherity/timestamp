@@ -30,11 +30,11 @@ type RootHashOption = {
 type TreeOrRootOptions = TreeOptions | RootHashOption | undefined;
 
 export class TimestampController {
-  private provider: Provider;
-  private signer?: Signer;
-  private contract: TypedContract<typeof TRUSTED_HINT_REGISTRY_ABI>;
-  private merkleTree?: StandardMerkleTree<any[]>;
-  private rootHash?: HexString;
+  private readonly provider: Provider;
+  private readonly signer?: Signer;
+  private readonly contract: TypedContract<typeof TRUSTED_HINT_REGISTRY_ABI>;
+  private readonly merkleTree?: StandardMerkleTree<any[]>;
+  private readonly rootHash?: HexString;
 
   /**
    * Creates a new instance of the TimestampController class.
@@ -102,14 +102,11 @@ export class TimestampController {
    * @throws {TimestampControllerError} If the transaction fails or no root hash is available.
    */
   async anchorRootHash(namespace: HexString, list: HexString): Promise<ContractTransactionResponse> {
-    if (!this.merkleTree) {
-      throw new TimestampControllerError('No merkle tree available to anchor.');
-    }
-    if (!this.rootHash) {
-      throw new TimestampControllerError('No root hash available to anchor.');
+    if (!this.merkleTree && !this.rootHash) {
+      throw new TimestampControllerError('No merkle tree or root hash available to anchor.');
     }
 
-    const key = this.rootHash;
+    const key = this.rootHash!;
     const value = "0x1000000000000000000000000000000000000000000000000000000000000000";
 
     try {
