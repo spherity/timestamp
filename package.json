@@ -23,7 +23,7 @@
   "scripts": {
     "build": "pkgroll",
     "test": "vitest --config vitest-unit.config.ts run",
-    "test:integration": "vitest --config vitest-unit.config.ts run"
+    "test:integration": "vitest --config vitest-integration.config.ts run"
   },
   "repository": {
     "type": "git",

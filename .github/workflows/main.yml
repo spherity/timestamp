@@ -51,7 +51,7 @@ jobs:
           key: timestamp${{ hashFiles('package-lock.json') }}
       - name: Build
         run: npm run build
-  test:
+  unit_test:
     needs: prepare
     runs-on: ubuntu-latest
     steps:
@@ -68,3 +68,22 @@ jobs:
           key: timestamp${{ hashFiles('package-lock.json') }}
       - name: Unit Test
         run: npm run test
+  integration_test:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Unpack node_modules
+        uses: actions/cache/restore@v3
+        id: cache
+        with:
+          path: node_modules
+          key: trusted-hint-controller${{ hashFiles('package-lock.json') }}
+      - name: Integration Test
+        run: npm run test:integration
+        env:
+          VITE_ANVIL_FORK_URL: ${{ secrets.VITE_ANVIL_FORK_URL }}

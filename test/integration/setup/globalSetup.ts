@@ -1,5 +1,5 @@
-import { startProxy } from '@viem/anvil'
-import {FORK_BLOCK_NUMBER, FORK_URL} from "./constants";
+import { startProxy } from "@viem/anvil";
+import { FORK_BLOCK_NUMBER, FORK_URL } from "./utils";
 
 export default async function () {
   return await startProxy({
@@ -8,7 +8,7 @@ export default async function () {
     options: {
       chainId: 11155111,
       forkUrl: FORK_URL,
-      forkBlockNumber: FORK_BLOCK_NUMBER
+      forkBlockNumber: FORK_BLOCK_NUMBER,
     },
   });
 }
