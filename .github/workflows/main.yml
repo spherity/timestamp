@@ -82,7 +82,7 @@ jobs:
         id: cache
         with:
           path: node_modules
-          key: trusted-hint-controller${{ hashFiles('package-lock.json') }}
+          key: timestamp${{ hashFiles('package-lock.json') }}
       - name: Integration Test
         run: npm run test:integration
         env:
