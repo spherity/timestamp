@@ -1,12 +1,14 @@
 import {
   TimestampController,
   TimestampControllerError,
+  VerificationFailure,
 } from "../../src/TimestampController";
 import {
   Contract,
   Signer,
   Provider,
   ContractTransactionResponse,
+  EventLog,
 } from "ethers";
 import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 import { vi, describe, it, expect, beforeEach } from "vitest";
@@ -16,6 +18,8 @@ vi.mock("@openzeppelin/merkle-tree");
 vi.mock("@spherity/trusted-hint-registry", () => ({
   TRUSTED_HINT_REGISTRY_ABI: ["mockedABI"],
 }));
+
+const CURRENT_BLOCK_TIMESTAMP = 100000;
 
 describe("TimestampController", () => {
   let mockSigner: Signer;
@@ -28,10 +32,18 @@ describe("TimestampController", () => {
       provider: {} as Provider,
     } as unknown as Signer;
 
-    mockProvider = {} as Provider;
+    mockProvider = {
+      getBlock: vi
+        .fn()
+        .mockResolvedValue({ timestamp: CURRENT_BLOCK_TIMESTAMP }),
+    } as unknown as Provider;
 
     mockContract = {
       setHint: vi.fn(),
+      filters: {
+        HintValueChanged: vi.fn().mockReturnValue({}),
+      },
+      queryFilter: vi.fn(),
     } as unknown as Contract;
 
     vi.mocked(Contract).mockImplementation(() => mockContract);
@@ -48,7 +60,11 @@ describe("TimestampController", () => {
   it("should initialize with a signer and tree options", () => {
     const controller = new TimestampController(
       mockSigner,
-      "0x0000000000000000000000000000000000000000",
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
       { leaves: ["data1", "data2"], encoding: ["string"] },
     );
 
@@ -65,7 +81,11 @@ describe("TimestampController", () => {
       "0x1234567890123456789012345678901234567890123456789012345678901234";
     const controller = new TimestampController(
       mockProvider,
-      "0x0000000000000000000000000000000000000000",
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
       { rootHash },
     );
 
@@ -82,10 +102,11 @@ describe("TimestampController", () => {
 
     expect(
       () =>
-        new TimestampController(
-          mockSignerWithoutProvider,
-          "0x0000000000000000000000000000000000000000",
-        ),
+        new TimestampController(mockSignerWithoutProvider, {
+          contractAddress: "0x0000000000000000000000000000000000000000",
+          namespace: "testNamespace",
+          list: "testList",
+        }),
     ).toThrow(
       "A provider must be available either through the signer or explicitly passed.",
     );
@@ -94,7 +115,11 @@ describe("TimestampController", () => {
   it("should create a merkle tree with the provided data", () => {
     new TimestampController(
       mockProvider,
-      "0x0000000000000000000000000000000000000000",
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
       {
         leaves: ["data1", "data2"],
         encoding: ["string"],
@@ -110,7 +135,11 @@ describe("TimestampController", () => {
   it("should get root hash", () => {
     const controller = new TimestampController(
       mockProvider,
-      "0x0000000000000000000000000000000000000000",
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
       { leaves: ["data1", "data2"], encoding: ["string"] },
     );
 
@@ -120,10 +149,11 @@ describe("TimestampController", () => {
   });
 
   it("should throw error when getting root hash if not available", () => {
-    const controller = new TimestampController(
-      mockProvider,
-      "0x0000000000000000000000000000000000000000",
-    );
+    const controller = new TimestampController(mockProvider, {
+      contractAddress: "0x0000000000000000000000000000000000000000",
+      namespace: "testNamespace",
+      list: "testList",
+    });
 
     expect(() => controller.getRootHash()).toThrow(TimestampControllerError);
   });
@@ -131,15 +161,19 @@ describe("TimestampController", () => {
   it("should anchor root hash", async () => {
     const controller = new TimestampController(
       mockSigner,
-      "0x0000000000000000000000000000000000000000",
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
       { leaves: ["data1", "data2"], encoding: ["string"] },
     );
 
-    await controller.anchorRootHash("0x1234", "0x5678");
+    await controller.anchorRootHash();
 
     expect(mockContract.setHint).toHaveBeenCalledWith(
-      "0x1234",
-      "0x5678",
+      "testNamespace",
+      "testList",
       "0x1234567890123456789012345678901234567890123456789012345678901234",
       "0x1000000000000000000000000000000000000000000000000000000000000000",
     );
@@ -148,7 +182,11 @@ describe("TimestampController", () => {
   it("should get merkle proof", () => {
     const controller = new TimestampController(
       mockProvider,
-      "0x0000000000000000000000000000000000000000",
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
       { leaves: ["data1", "data2"], encoding: ["string"] },
     );
 
@@ -163,7 +201,11 @@ describe("TimestampController", () => {
   it("should get all merkle proofs", () => {
     const controller = new TimestampController(
       mockProvider,
-      "0x0000000000000000000000000000000000000000",
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
       { leaves: ["data1", "data2"], encoding: ["string"] },
     );
 
@@ -175,31 +217,110 @@ describe("TimestampController", () => {
     ]);
   });
 
-  it("should verify proof", () => {
+  it("should verify proof", async () => {
     vi.mocked(StandardMerkleTree.verify).mockReturnValue(true);
+    vi.mocked(mockContract.queryFilter).mockResolvedValue([
+      {
+        args: {
+          value:
+            "0x1000000000000000000000000000000000000000000000000000000000000000",
+        },
+      },
+    ] as unknown as EventLog[]);
 
     const controller = new TimestampController(
       mockProvider,
-      "0x0000000000000000000000000000000000000000",
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
       {
         rootHash:
           "0x1234567890123456789012345678901234567890123456789012345678901234",
       },
     );
 
-    const result = controller.verifyProof(
+    const result = await controller.verifyProof(
       ["leaf1"],
       ["proof1", "proof2"],
-      ["string"],
+      new Date(CURRENT_BLOCK_TIMESTAMP),
     );
 
-    expect(result).toBe(true);
+    expect(result).toEqual({ verified: true });
     expect(StandardMerkleTree.verify).toHaveBeenCalledWith(
       "0x1234567890123456789012345678901234567890123456789012345678901234",
       ["string"],
       ["leaf1"],
       ["proof1", "proof2"],
     );
+  });
+
+  it("should return false when root hash is not found", async () => {
+    vi.mocked(mockContract.queryFilter).mockResolvedValue([]);
+
+    const controller = new TimestampController(
+      mockProvider,
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
+      {
+        rootHash:
+          "0x1234567890123456789012345678901234567890123456789012345678901234",
+      },
+    );
+
+    const result = await controller.verifyProof(
+      ["leaf1"],
+      ["proof1", "proof2"],
+      new Date(),
+    );
+
+    expect(result).toEqual({
+      verified: false,
+      reason: VerificationFailure.ROOT_HASH_NOT_FOUND,
+    });
+  });
+
+  it("should return false when root hash is expired", async () => {
+    vi.mocked(mockContract.queryFilter).mockResolvedValue([
+      {
+        args: {
+          value:
+            "0x1000000000000000000000000000000000000000000000000000000000000000",
+        },
+      },
+    ] as unknown as EventLog[]);
+    vi.mocked(mockProvider.getBlock).mockResolvedValue({
+      timestamp: 1000,
+    } as any);
+
+    const controller = new TimestampController(
+      mockProvider,
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
+      {
+        rootHash:
+          "0x1234567890123456789012345678901234567890123456789012345678901234",
+      },
+    );
+
+    const result = await controller.verifyProof(
+      ["leaf1"],
+      ["proof1", "proof2"],
+      new Date(0),
+      1, // maxTimeDifference of 1 second
+    );
+
+    expect(result).toEqual({
+      verified: false,
+      reason: VerificationFailure.ROOT_HASH_EXPIRED,
+    });
   });
 
   it("should throw an error when creating merkle tree fails", () => {
@@ -211,23 +332,28 @@ describe("TimestampController", () => {
       () =>
         new TimestampController(
           mockProvider,
-          "0x0000000000000000000000000000000000000000",
+          {
+            contractAddress: "0x0000000000000000000000000000000000000000",
+            namespace: "testNamespace",
+            list: "testList",
+          },
           { leaves: ["data1", "data2"], encoding: ["string"] },
         ),
     ).toThrow(TimestampControllerError);
   });
 
   it("should throw an error when trying to anchor without both merkle tree and root hash", async () => {
-    const controller = new TimestampController(
-      mockSigner,
-      "0x0000000000000000000000000000000000000000",
-    );
+    const controller = new TimestampController(mockSigner, {
+      contractAddress: "0x0000000000000000000000000000000000000000",
+      namespace: "testNamespace",
+      list: "testList",
+    });
 
-    await expect(controller.anchorRootHash("0x1234", "0x5678")).rejects.toThrow(
+    await expect(controller.anchorRootHash()).rejects.toThrow(
       TimestampControllerError,
     );
 
-    await expect(controller.anchorRootHash("0x1234", "0x5678")).rejects.toThrow(
+    await expect(controller.anchorRootHash()).rejects.toThrow(
       "No merkle tree or root hash available to anchor.",
     );
   });
@@ -235,7 +361,11 @@ describe("TimestampController", () => {
   it("should not throw an error when anchoring with only a root hash", async () => {
     const controller = new TimestampController(
       mockSigner,
-      "0x0000000000000000000000000000000000000000",
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
       {
         rootHash:
           "0x1234567890123456789012345678901234567890123456789012345678901234",
@@ -246,31 +376,7 @@ describe("TimestampController", () => {
       {} as ContractTransactionResponse,
     );
 
-    await expect(
-      controller.anchorRootHash("0x1234", "0x5678"),
-    ).resolves.not.toThrow();
-  });
-
-  it("should not throw an error when anchoring with only a merkle tree", async () => {
-    vi.mocked(StandardMerkleTree.of).mockReturnValueOnce({
-      root: "0x1234567890123456789012345678901234567890123456789012345678901234",
-      getProof: vi.fn(),
-      entries: vi.fn(),
-    } as unknown as StandardMerkleTree<any[]>);
-
-    const controller = new TimestampController(
-      mockSigner,
-      "0x0000000000000000000000000000000000000000",
-      { leaves: ["leaf1", "leaf2"], encoding: ["string"] },
-    );
-
-    vi.mocked(mockContract.setHint!).mockResolvedValueOnce(
-      {} as ContractTransactionResponse,
-    );
-
-    await expect(
-      controller.anchorRootHash("0x1234", "0x5678"),
-    ).resolves.not.toThrow();
+    await expect(controller.anchorRootHash()).resolves.not.toThrow();
   });
 
   it("should throw an error when anchoring root hash fails", async () => {
@@ -280,11 +386,15 @@ describe("TimestampController", () => {
 
     const controller = new TimestampController(
       mockSigner,
-      "0x0000000000000000000000000000000000000000",
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
       { leaves: ["data1", "data2"], encoding: ["string"] },
     );
 
-    await expect(controller.anchorRootHash("0x1234", "0x5678")).rejects.toThrow(
+    await expect(controller.anchorRootHash()).rejects.toThrow(
       TimestampControllerError,
     );
   });
@@ -292,7 +402,11 @@ describe("TimestampController", () => {
   it("should throw an error when getting merkle proof without merkle tree", () => {
     const controller = new TimestampController(
       mockProvider,
-      "0x0000000000000000000000000000000000000000",
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
       {
         rootHash:
           "0x1234567890123456789012345678901234567890123456789012345678901234",
@@ -307,7 +421,11 @@ describe("TimestampController", () => {
   it("should throw an error when getting all merkle proofs without merkle tree", () => {
     const controller = new TimestampController(
       mockProvider,
-      "0x0000000000000000000000000000000000000000",
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
       {
         rootHash:
           "0x1234567890123456789012345678901234567890123456789012345678901234",
@@ -319,15 +437,16 @@ describe("TimestampController", () => {
     );
   });
 
-  it("should throw an error when verifying proof without root hash", () => {
-    const controller = new TimestampController(
-      mockProvider,
-      "0x0000000000000000000000000000000000000000",
-    );
+  it("should throw an error when verifying proof without root hash", async () => {
+    const controller = new TimestampController(mockProvider, {
+      contractAddress: "0x0000000000000000000000000000000000000000",
+      namespace: "testNamespace",
+      list: "testList",
+    });
 
-    expect(() =>
-      controller.verifyProof(["leaf1"], ["proof1", "proof2"], ["string"]),
-    ).toThrow(TimestampControllerError);
+    await expect(
+      controller.verifyProof(["leaf1"], ["proof1", "proof2"], new Date()),
+    ).rejects.toThrow(TimestampControllerError);
   });
 
   it("should throw an error when failing to get proof for a specific leaf index", () => {
@@ -345,7 +464,11 @@ describe("TimestampController", () => {
 
     const controller = new TimestampController(
       mockProvider,
-      "0x0000000000000000000000000000000000000000",
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
       { leaves: ["leaf1", "leaf2"], encoding: ["string"] },
     );
 
@@ -354,6 +477,118 @@ describe("TimestampController", () => {
     );
     expect(() => controller.getAllMerkleProofs()).toThrow(
       "Failed to get proof for leaf at index 1",
+    );
+  });
+
+  it("should return false when merkle proof is invalid", async () => {
+    vi.mocked(StandardMerkleTree.verify).mockReturnValue(false);
+    vi.mocked(mockContract.queryFilter).mockResolvedValue([
+      {
+        args: {
+          value:
+            "0x1000000000000000000000000000000000000000000000000000000000000000",
+        },
+      },
+    ] as unknown as EventLog[]);
+
+    const controller = new TimestampController(
+      mockProvider,
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
+      {
+        rootHash:
+          "0x1234567890123456789012345678901234567890123456789012345678901234",
+      },
+    );
+
+    const result = await controller.verifyProof(
+      ["leaf1"],
+      ["proof1", "proof2"],
+      new Date(CURRENT_BLOCK_TIMESTAMP),
+    );
+
+    expect(result).toEqual({
+      verified: false,
+      reason: VerificationFailure.MERKLE_PROOF_INVALID,
+    });
+  });
+
+  it("should use default maxTimeDifference when not provided", async () => {
+    vi.mocked(StandardMerkleTree.verify).mockReturnValue(true);
+    vi.mocked(mockContract.queryFilter).mockResolvedValue([
+      {
+        args: {
+          value:
+            "0x1000000000000000000000000000000000000000000000000000000000000000",
+        },
+      },
+    ] as unknown as EventLog[]);
+    vi.mocked(mockProvider.getBlock).mockResolvedValue({
+      timestamp: Date.now(),
+    } as any);
+
+    const controller = new TimestampController(
+      mockProvider,
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
+      {
+        rootHash:
+          "0x1234567890123456789012345678901234567890123456789012345678901234",
+      },
+    );
+
+    const result = await controller.verifyProof(
+      ["leaf1"],
+      ["proof1", "proof2"],
+      new Date(),
+    );
+
+    expect(result).toEqual({ verified: true });
+  });
+
+  it("should use custom leafEncoding when provided", async () => {
+    vi.mocked(StandardMerkleTree.verify).mockReturnValue(true);
+    vi.mocked(mockContract.queryFilter).mockResolvedValue([
+      {
+        args: {
+          value:
+            "0x1000000000000000000000000000000000000000000000000000000000000000",
+        },
+      },
+    ] as unknown as EventLog[]);
+
+    const controller = new TimestampController(
+      mockProvider,
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
+      {
+        rootHash:
+          "0x1234567890123456789012345678901234567890123456789012345678901234",
+      },
+    );
+
+    const verified = await controller.verifyProof(
+      ["leaf1"],
+      ["proof1", "proof2"],
+      new Date(CURRENT_BLOCK_TIMESTAMP),
+      30 * 24 * 3600,
+      ["bytes32"],
+    );
+
+    expect(StandardMerkleTree.verify).toHaveBeenCalledWith(
+      "0x1234567890123456789012345678901234567890123456789012345678901234",
+      ["bytes32"],
+      ["leaf1"],
+      ["proof1", "proof2"],
     );
   });
 });

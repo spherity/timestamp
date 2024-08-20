@@ -12,6 +12,7 @@ describe("TimestampController (Integration)", () => {
   let hintRegistry: TypedContract<typeof TRUSTED_HINT_REGISTRY_ABI>;
   let controller: TimestampController;
   let signer: JsonRpcSigner;
+  let provider: JsonRpcProvider;
   let namespace: string;
   const list = keccak256(Buffer.from("list"));
   const leaves = [
@@ -31,7 +32,7 @@ describe("TimestampController (Integration)", () => {
 
   beforeAll(async () => {
     const hintRegistryAddress = deployments[0]!.registry;
-    const provider = new JsonRpcProvider(`http://127.0.0.1:8545/${pool}`);
+    provider = new JsonRpcProvider(`http://127.0.0.1:8545/${pool}`);
     signer = await provider.getSigner();
     namespace = await signer.getAddress();
 
@@ -54,7 +55,7 @@ describe("TimestampController (Integration)", () => {
   it("should anchor root hash", async () => {
     const tx = await controller.anchorRootHash();
     const hintValue = await hintRegistry.getHint(
-      signer.address,
+      namespace,
       list,
       controller.getRootHash(),
     );
@@ -66,41 +67,65 @@ describe("TimestampController (Integration)", () => {
   });
 
   it("should get and verify merkle proof", async () => {
+    const currentBlockTime = await provider
+      .getBlock("latest")
+      .then((block) => block!.timestamp);
     await controller.anchorRootHash();
     const proof = controller.getMerkleProof(["data1"]);
-    const verified = await controller.verifyProof(["data1"], proof.proof);
+    const verified = await controller.verifyProof(
+      proof.leaf,
+      proof.proof,
+      new Date(currentBlockTime),
+    );
 
     expect(proof).toBeDefined();
-    expect(verified).toBe(true);
+    expect(verified.verified).toBe(true);
   });
 
   it("should get and verify all merkle proofs", async () => {
+    const currentBlockTime = await provider
+      .getBlock("latest")
+      .then((block) => block!.timestamp);
     await controller.anchorRootHash();
     const proofs = controller.getAllMerkleProofs();
     const verified = await Promise.all(
-      proofs.map((proof) => controller.verifyProof([proof.leaf], proof.proof)),
+      proofs.map((proof) =>
+        controller.verifyProof(
+          [proof.leaf],
+          proof.proof,
+          new Date(currentBlockTime),
+        ),
+      ),
     );
 
     expect(proofs).toBeDefined();
     expect(proofs.length).toBe(leaves.length);
-    expect(verified).toEqual(Array(leaves.length).fill(true));
+    expect(verified.every((v) => v.verified)).toBe(true);
   });
 
   it("should fail to verify wrong proof", async () => {
     await controller.anchorRootHash();
     const proof = controller.getMerkleProof(["data1"]);
-    const verified = await controller.verifyProof(["data2"], proof.proof);
+    const verified = await controller.verifyProof(
+      ["data2"],
+      proof.proof,
+      new Date(),
+    );
 
     expect(proof).toBeDefined();
-    expect(verified).toBe(false);
+    expect(verified.verified).toBe(false);
   });
 
   it("should fail to verify proof for non-anchored root hash", async () => {
     const proof = controller.getMerkleProof(["data1"]);
-    const verified = await controller.verifyProof(["data1"], proof.proof);
+    const verified = await controller.verifyProof(
+      proof.leaf,
+      proof.proof,
+      new Date(),
+    );
 
     expect(proof).toBeDefined();
-    expect(verified).toBe(false);
+    expect(verified.verified).toBe(false);
   });
 
   it("should fail to get proof for non-existent leaf", () => {

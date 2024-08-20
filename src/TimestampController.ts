@@ -9,19 +9,25 @@ import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 import { TRUSTED_HINT_REGISTRY_ABI } from "@spherity/trusted-hint-registry";
 import { TypedContract } from "ethers-abitype";
 
-export type ProviderOrSigner = Signer | Provider;
+type ProviderOrSigner = Signer | Provider;
 
-export interface MerkleProof {
+interface MerkleProof {
   leaf: any;
   proof: string[];
 }
 
-export class TimestampControllerError extends Error {
+class TimestampControllerError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "TimestampControllerError";
   }
 }
+
+const VerificationFailure = {
+  ROOT_HASH_EXPIRED: "root_hash_expired",
+  ROOT_HASH_NOT_FOUND: "root_hash_not_found",
+  MERKLE_PROOF_INVALID: "merkle_proof_invalid",
+} as const;
 
 type TreeOptions = {
   leaves: any[];
@@ -40,21 +46,14 @@ type ContractOptions = {
   list: string;
 };
 
-export class TimestampController {
+class TimestampController {
   private readonly provider: Provider;
   private readonly signer?: Signer;
   private readonly contract: TypedContract<typeof TRUSTED_HINT_REGISTRY_ABI>;
-  private readonly merkleTree?: StandardMerkleTree<any[]>;
-  private readonly rootHash?: string;
+  private merkleTree?: StandardMerkleTree<any[]>;
+  private rootHash?: string;
   private readonly contractOptions: ContractOptions;
 
-  /**
-   * Creates a new instance of the TimestampController class.
-   * @param providerOrSigner - The provider or signer to use for interacting with the contract.
-   * @param contractOptions - The address of the contract to interact with, and the namespace and list to use.
-   * @param treeOrRootOptions - Optional. Either TreeOptions to create a new tree, RootHashOption to use an existing root hash, or undefined.
-   * @throws {TimestampControllerError} If invalid options are provided or if tree creation fails.
-   */
   constructor(
     providerOrSigner: ProviderOrSigner,
     contractOptions: ContractOptions,
@@ -81,30 +80,33 @@ export class TimestampController {
       this.signer || this.provider,
     ) as unknown as TypedContract<typeof TRUSTED_HINT_REGISTRY_ABI>;
 
-    if (treeOrRootOptions) {
-      if ("leaves" in treeOrRootOptions) {
-        try {
-          this.merkleTree = StandardMerkleTree.of(
-            treeOrRootOptions.leaves.map((leaf) => [leaf]),
-            treeOrRootOptions.encoding,
-          );
-          this.rootHash = this.merkleTree.root;
-        } catch (error) {
-          throw new TimestampControllerError(
-            `Failed to create merkle tree: ${error instanceof Error ? error.message : String(error)}`,
-          );
-        }
-      } else if ("rootHash" in treeOrRootOptions) {
-        this.rootHash = treeOrRootOptions.rootHash;
-      }
+    this.initializeTreeOrRoot(treeOrRootOptions);
+  }
+
+  private initializeTreeOrRoot(treeOrRootOptions?: TreeOrRootOptions): void {
+    if (!treeOrRootOptions) return;
+
+    if ("leaves" in treeOrRootOptions) {
+      this.createMerkleTree(treeOrRootOptions);
+    } else if ("rootHash" in treeOrRootOptions) {
+      this.rootHash = treeOrRootOptions.rootHash;
     }
   }
 
-  /**
-   * Get the root hash of the merkle tree.
-   * @returns The root hash as a HexString.
-   * @throws {TimestampControllerError} If no root hash is available.
-   */
+  private createMerkleTree(options: TreeOptions): void {
+    try {
+      this.merkleTree = StandardMerkleTree.of(
+        options.leaves.map((leaf) => [leaf]),
+        options.encoding,
+      );
+      this.rootHash = this.merkleTree.root;
+    } catch (error) {
+      throw new TimestampControllerError(
+        `Failed to create merkle tree: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   getRootHash(): string {
     if (!this.rootHash) {
       throw new TimestampControllerError(
@@ -114,30 +116,24 @@ export class TimestampController {
     return this.rootHash;
   }
 
-  /**
-   * Anchor the root hash to the contract.
-   * @returns A promise that resolves to the transaction response.
-   * @throws {TimestampControllerError} If the transaction fails or no root hash is available.
-   */
   async anchorRootHash(): Promise<ContractTransactionResponse> {
-    if (!this.merkleTree && !this.rootHash) {
+    if (!this.rootHash) {
       throw new TimestampControllerError(
         "No merkle tree or root hash available to anchor.",
       );
     }
 
-    const key = this.rootHash!;
+    const key = this.rootHash;
     const value =
       "0x1000000000000000000000000000000000000000000000000000000000000000";
 
     try {
-      const txResponse = await this.contract.setHint(
+      return await this.contract.setHint(
         this.contractOptions.namespace,
         this.contractOptions.list,
         key,
         value,
       );
-      return txResponse;
     } catch (error) {
       throw new TimestampControllerError(
         `Failed to anchor root hash: ${error instanceof Error ? error.message : String(error)}`,
@@ -145,12 +141,6 @@ export class TimestampController {
     }
   }
 
-  /**
-   * Get the merkle proof for a specific value.
-   * @param value - The value to get the proof for.
-   * @returns An object containing the leaf value and the proof.
-   * @throws {TimestampControllerError} If no merkle tree is available.
-   */
   getMerkleProof(value: [any]): MerkleProof {
     if (!this.merkleTree) {
       throw new TimestampControllerError(
@@ -163,11 +153,6 @@ export class TimestampController {
     };
   }
 
-  /**
-   * Get all merkle proofs in the tree.
-   * @returns An array of objects, each containing a leaf value and its corresponding proof.
-   * @throws {TimestampControllerError} If no merkle tree is available.
-   */
   getAllMerkleProofs(): MerkleProof[] {
     if (!this.merkleTree) {
       throw new TimestampControllerError(
@@ -181,51 +166,87 @@ export class TimestampController {
           `Failed to get proof for leaf at index ${index}`,
         );
       }
-      return {
-        leaf: value,
-        proof: proof,
-      };
+      return { leaf: value, proof };
     });
   }
-  /**
-   * Verify a merkle proof for a given value.
-   * @param leaf - The leaf value.
-   * @param proof - The merkle proof.
-   * @param leafEncoding - The encoding of the leaf value. Defaults to ["string"].
-   * @returns True if the proof is valid, false otherwise.
-   * @throws {TimestampControllerError} If no root hash is available.
-   */
+
   async verifyProof(
     leaf: [any],
     proof: string[],
+    leafCreationTime: Date,
+    maxTimeDifference: number = 30 * 24 * 3600,
     leafEncoding: string[] = ["string"],
-  ): Promise<boolean> {
+  ): Promise<{ verified: boolean; reason?: string }> {
     if (!this.rootHash) {
       throw new TimestampControllerError(
         "No root hash available. Initialize with leaves or provide a root hash.",
       );
     }
 
+    const events = await this.getHintValueChangedEvents();
+    if (events.length === 0) {
+      return {
+        verified: false,
+        reason: VerificationFailure.ROOT_HASH_NOT_FOUND,
+      };
+    }
+
+    const latestEvent = events[events.length - 1] as EventLog;
+    if (
+      latestEvent.args.value !==
+      "0x1000000000000000000000000000000000000000000000000000000000000000"
+    ) {
+      return {
+        verified: false,
+        reason: VerificationFailure.ROOT_HASH_NOT_FOUND,
+      };
+    }
+
+    const rootHashTimestamp = await this.getRootHashBlockTimestamp(latestEvent);
+    if (
+      !this.isTimestampValid(
+        rootHashTimestamp,
+        leafCreationTime,
+        maxTimeDifference,
+      )
+    ) {
+      return { verified: false, reason: VerificationFailure.ROOT_HASH_EXPIRED };
+    }
+
+    const verified = StandardMerkleTree.verify(
+      this.rootHash,
+      leafEncoding,
+      leaf,
+      proof,
+    );
+    return verified
+      ? { verified: true }
+      : { verified: false, reason: VerificationFailure.MERKLE_PROOF_INVALID };
+  }
+
+  private async getHintValueChangedEvents() {
     const filter = this.contract.filters.HintValueChanged(
       this.contractOptions.namespace,
       this.contractOptions.list,
       this.rootHash,
     );
-    const events = await this.contract.queryFilter(filter);
+    return await this.contract.queryFilter(filter);
+  }
 
-    if (events.length === 0) {
-      return false;
-    }
-    const latestEvent = events[events.length - 1] as EventLog;
+  private async getRootHashBlockTimestamp(event: EventLog): Promise<number> {
+    const block = await this.provider.getBlock(event.blockNumber);
+    return block!.timestamp;
+  }
 
-    if (
-      latestEvent &&
-      latestEvent.args.value !==
-        "0x1000000000000000000000000000000000000000000000000000000000000000"
-    ) {
-      return false;
-    }
-
-    return StandardMerkleTree.verify(this.rootHash, leafEncoding, leaf, proof);
+  private isTimestampValid(
+    rootHashTimestamp: number,
+    leafCreationTime: Date,
+    maxTimeDifference: number,
+  ): boolean {
+    const leafCreationTimestamp = Math.floor(leafCreationTime.getTime());
+    const timeDifference = Math.abs(rootHashTimestamp - leafCreationTimestamp);
+    return timeDifference <= maxTimeDifference;
   }
 }
+
+export { TimestampController, TimestampControllerError, VerificationFailure };
