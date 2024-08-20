@@ -28,7 +28,7 @@ describe("TimestampController (Integration)", () => {
   const encoding = ["string"];
 
   beforeAll(async () => {
-    const hintRegistryAddress = deployments[0].registry;
+    const hintRegistryAddress = deployments[0]!.registry;
     const provider = new JsonRpcProvider(`http://127.0.0.1:8545/${pool}`);
     signer = await provider.getSigner();
 
