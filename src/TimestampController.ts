@@ -3,6 +3,7 @@ import {
   Signer,
   Provider,
   ContractTransactionResponse,
+  EventLog,
 } from "ethers";
 import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 import { TRUSTED_HINT_REGISTRY_ABI } from "@spherity/trusted-hint-registry";
@@ -33,25 +34,34 @@ type RootHashOption = {
 
 type TreeOrRootOptions = TreeOptions | RootHashOption | undefined;
 
+type ContractOptions = {
+  contractAddress: string;
+  namespace: string;
+  list: string;
+};
+
 export class TimestampController {
   private readonly provider: Provider;
   private readonly signer?: Signer;
   private readonly contract: TypedContract<typeof TRUSTED_HINT_REGISTRY_ABI>;
   private readonly merkleTree?: StandardMerkleTree<any[]>;
   private readonly rootHash?: string;
+  private readonly contractOptions: ContractOptions;
 
   /**
    * Creates a new instance of the TimestampController class.
    * @param providerOrSigner - The provider or signer to use for interacting with the contract.
-   * @param contractAddress - The address of the contract to interact with.
+   * @param contractOptions - The address of the contract to interact with, and the namespace and list to use.
    * @param treeOrRootOptions - Optional. Either TreeOptions to create a new tree, RootHashOption to use an existing root hash, or undefined.
    * @throws {TimestampControllerError} If invalid options are provided or if tree creation fails.
    */
   constructor(
     providerOrSigner: ProviderOrSigner,
-    contractAddress: string,
+    contractOptions: ContractOptions,
     treeOrRootOptions?: TreeOrRootOptions,
   ) {
+    this.contractOptions = contractOptions;
+
     if ("getAddress" in providerOrSigner) {
       this.signer = providerOrSigner as Signer;
       this.provider = this.signer.provider!;
@@ -66,7 +76,7 @@ export class TimestampController {
     }
 
     this.contract = new Contract(
-      contractAddress,
+      this.contractOptions.contractAddress,
       TRUSTED_HINT_REGISTRY_ABI,
       this.signer || this.provider,
     ) as unknown as TypedContract<typeof TRUSTED_HINT_REGISTRY_ABI>;
@@ -106,15 +116,10 @@ export class TimestampController {
 
   /**
    * Anchor the root hash to the contract.
-   * @param namespace - The namespace to use for anchoring.
-   * @param list - The list identifier.
    * @returns A promise that resolves to the transaction response.
    * @throws {TimestampControllerError} If the transaction fails or no root hash is available.
    */
-  async anchorRootHash(
-    namespace: string,
-    list: string,
-  ): Promise<ContractTransactionResponse> {
+  async anchorRootHash(): Promise<ContractTransactionResponse> {
     if (!this.merkleTree && !this.rootHash) {
       throw new TimestampControllerError(
         "No merkle tree or root hash available to anchor.",
@@ -127,8 +132,8 @@ export class TimestampController {
 
     try {
       const txResponse = await this.contract.setHint(
-        namespace,
-        list,
+        this.contractOptions.namespace,
+        this.contractOptions.list,
         key,
         value,
       );
@@ -186,20 +191,41 @@ export class TimestampController {
    * Verify a merkle proof for a given value.
    * @param leaf - The leaf value.
    * @param proof - The merkle proof.
+   * @param leafEncoding - The encoding of the leaf value. Defaults to ["string"].
    * @returns True if the proof is valid, false otherwise.
    * @throws {TimestampControllerError} If no root hash is available.
    */
-  verifyProof(
+  async verifyProof(
     leaf: [any],
     proof: string[],
     leafEncoding: string[] = ["string"],
-  ): boolean {
-    // TODO: Check root hash existence on chain
+  ): Promise<boolean> {
     if (!this.rootHash) {
       throw new TimestampControllerError(
         "No root hash available. Initialize with leaves or provide a root hash.",
       );
     }
+
+    const filter = this.contract.filters.HintValueChanged(
+      this.contractOptions.namespace,
+      this.contractOptions.list,
+      this.rootHash,
+    );
+    const events = await this.contract.queryFilter(filter);
+
+    if (events.length === 0) {
+      return false;
+    }
+    const latestEvent = events[events.length - 1] as EventLog;
+
+    if (
+      latestEvent &&
+      latestEvent.args.value !==
+        "0x1000000000000000000000000000000000000000000000000000000000000000"
+    ) {
+      return false;
+    }
+
     return StandardMerkleTree.verify(this.rootHash, leafEncoding, leaf, proof);
   }
 }
