@@ -65,7 +65,7 @@ describe("TimestampController", () => {
         namespace: "testNamespace",
         list: "testList",
       },
-      { leaves: ["data1", "data2"], encoding: ["string"] }
+      { leaves: [["data1"], ["data2"]], encoding: ["string"] }
     );
 
     expect(controller["signer"]).toBe(mockSigner);
@@ -121,7 +121,7 @@ describe("TimestampController", () => {
         list: "testList",
       },
       {
-        leaves: ["data1", "data2"],
+        leaves: [["data1"], ["data2"]],
         encoding: ["string"],
       }
     );
@@ -129,6 +129,32 @@ describe("TimestampController", () => {
     expect(StandardMerkleTree.of).toHaveBeenCalledWith(
       [["data1"], ["data2"]],
       ["string"]
+    );
+  });
+
+  it("should create a merkle tree with the provided data with multiple encodes", () => {
+    new TimestampController(
+      mockProvider,
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
+      {
+        leaves: [
+          ["0x1111111111111111111111111111111111111111", "5000000000000000000"],
+          ["0x2222222222222222222222222222222222222222", "2500000000000000000"],
+        ],
+        encoding: ["address", "uint256"],
+      }
+    );
+
+    expect(StandardMerkleTree.of).toHaveBeenCalledWith(
+      [
+        ["0x1111111111111111111111111111111111111111", "5000000000000000000"],
+        ["0x2222222222222222222222222222222222222222", "2500000000000000000"],
+      ],
+      ["address", "uint256"]
     );
   });
 
@@ -140,7 +166,7 @@ describe("TimestampController", () => {
         namespace: "testNamespace",
         list: "testList",
       },
-      { leaves: ["data1", "data2"], encoding: ["string"] }
+      { leaves: [["data1"], ["data2"]], encoding: ["string"] }
     );
 
     expect(controller.getRootHash()).toBe(
@@ -166,7 +192,7 @@ describe("TimestampController", () => {
         namespace: "testNamespace",
         list: "testList",
       },
-      { leaves: ["data1", "data2"], encoding: ["string"] }
+      { leaves: [["data1"], ["data2"]], encoding: ["string"] }
     );
 
     await controller.anchorRootHash();
@@ -187,7 +213,7 @@ describe("TimestampController", () => {
         namespace: "testNamespace",
         list: "testList",
       },
-      { leaves: ["data1", "data2"], encoding: ["string"] }
+      { leaves: [["data1"], ["data2"]], encoding: ["string"] }
     );
 
     const proof = controller.getMerkleProof(["data1"]);
@@ -206,7 +232,7 @@ describe("TimestampController", () => {
         namespace: "testNamespace",
         list: "testList",
       },
-      { leaves: ["data1", "data2"], encoding: ["string"] }
+      { leaves: [["data1"], ["data2"]], encoding: ["string"] }
     );
 
     const proofs = controller.getAllMerkleProofs();
@@ -337,7 +363,7 @@ describe("TimestampController", () => {
             namespace: "testNamespace",
             list: "testList",
           },
-          { leaves: ["data1", "data2"], encoding: ["string"] }
+          { leaves: [["data1"], ["data2"]], encoding: ["string"] }
         )
     ).toThrow(TimestampControllerError);
   });
@@ -391,7 +417,7 @@ describe("TimestampController", () => {
         namespace: "testNamespace",
         list: "testList",
       },
-      { leaves: ["data1", "data2"], encoding: ["string"] }
+      { leaves: [["data1"], ["data2"]], encoding: ["string"] }
     );
 
     await expect(controller.anchorRootHash()).rejects.toThrow(
@@ -469,7 +495,7 @@ describe("TimestampController", () => {
         namespace: "testNamespace",
         list: "testList",
       },
-      { leaves: ["leaf1", "leaf2"], encoding: ["string"] }
+      { leaves: [["data1"], ["data2"]], encoding: ["string"] }
     );
 
     expect(() => controller.getAllMerkleProofs()).toThrow(

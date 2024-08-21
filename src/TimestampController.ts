@@ -12,7 +12,7 @@ import { TypedContract } from "ethers-abitype";
 type ProviderOrSigner = Signer | Provider;
 
 interface MerkleProof {
-  leaf: [any];
+  leaf: [[any]];
   proof: string[];
 }
 
@@ -117,10 +117,7 @@ class TimestampController {
    */
   private createMerkleTree(options: TreeOptions): void {
     try {
-      this.merkleTree = StandardMerkleTree.of(
-        options.leaves.map((leaf) => [leaf]),
-        options.encoding
-      );
+      this.merkleTree = StandardMerkleTree.of(options.leaves, options.encoding);
       this.rootHash = this.merkleTree.root;
     } catch (error) {
       throw new TimestampControllerError(
@@ -179,19 +176,19 @@ class TimestampController {
 
   /**
    * Gets the merkle proof for a given leaf value.
-   * @param value - The leaf value to get the proof for.
+   * @param leaf - The leaf value to get the proof for.
    * @returns The merkle proof for the given leaf.
    * @throws {TimestampControllerError} If no merkle tree is available.
    */
-  getMerkleProof(value: [any]): MerkleProof {
+  getMerkleProof(leaf: [any]): MerkleProof {
     if (!this.merkleTree) {
       throw new TimestampControllerError(
         "No merkle tree available. Initialize with leaves to use this method."
       );
     }
     return {
-      leaf: value,
-      proof: this.merkleTree.getProof(value),
+      leaf,
+      proof: this.merkleTree.getProof(leaf),
     };
   }
 

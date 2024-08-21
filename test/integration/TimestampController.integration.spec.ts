@@ -15,19 +15,7 @@ describe("TimestampController (Integration)", () => {
   let provider: JsonRpcProvider;
   let namespace: string;
   const list = keccak256(Buffer.from("list"));
-  const leaves = [
-    "data1",
-    "data2",
-    "data3",
-    "data4",
-    "data5",
-    "data6",
-    "data7",
-    "data8",
-    "data9",
-    "data10",
-    "data11",
-  ];
+  const leaves = [["data1"], ["data2"], ["data3"]];
   const encoding = ["string"];
 
   beforeAll(async () => {
