@@ -39,7 +39,7 @@ describe("TimestampController (Integration)", () => {
     hintRegistry = new Contract(
       hintRegistryAddress,
       TRUSTED_HINT_REGISTRY_ABI,
-      signer,
+      signer
     ) as unknown as TypedContract<typeof TRUSTED_HINT_REGISTRY_ABI>;
 
     controller = new TimestampController(
@@ -48,7 +48,7 @@ describe("TimestampController (Integration)", () => {
       {
         leaves,
         encoding,
-      },
+      }
     );
   });
 
@@ -57,12 +57,12 @@ describe("TimestampController (Integration)", () => {
     const hintValue = await hintRegistry.getHint(
       namespace,
       list,
-      controller.getRootHash(),
+      controller.getRootHash()
     );
 
     expect(tx).toBeDefined();
     expect(hintValue).toBe(
-      "0x1000000000000000000000000000000000000000000000000000000000000000",
+      "0x1000000000000000000000000000000000000000000000000000000000000000"
     );
   });
 
@@ -75,7 +75,7 @@ describe("TimestampController (Integration)", () => {
     const verified = await controller.verifyProof(
       proof.leaf,
       proof.proof,
-      new Date(currentBlockTime),
+      new Date(currentBlockTime)
     );
 
     expect(proof).toBeDefined();
@@ -91,11 +91,11 @@ describe("TimestampController (Integration)", () => {
     const verified = await Promise.all(
       proofs.map((proof) =>
         controller.verifyProof(
-          [proof.leaf],
+          proof.leaf,
           proof.proof,
-          new Date(currentBlockTime),
-        ),
-      ),
+          new Date(currentBlockTime)
+        )
+      )
     );
 
     expect(proofs).toBeDefined();
@@ -109,7 +109,7 @@ describe("TimestampController (Integration)", () => {
     const verified = await controller.verifyProof(
       ["data2"],
       proof.proof,
-      new Date(),
+      new Date()
     );
 
     expect(proof).toBeDefined();
@@ -121,7 +121,7 @@ describe("TimestampController (Integration)", () => {
     const verified = await controller.verifyProof(
       proof.leaf,
       proof.proof,
-      new Date(),
+      new Date()
     );
 
     expect(proof).toBeDefined();

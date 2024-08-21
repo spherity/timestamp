@@ -12,7 +12,7 @@ import { TypedContract } from "ethers-abitype";
 type ProviderOrSigner = Signer | Provider;
 
 interface MerkleProof {
-  leaf: any;
+  leaf: [any];
   proof: string[];
 }
 
@@ -46,6 +46,10 @@ type ContractOptions = {
   list: string;
 };
 
+/**
+ * TimestampController class for managing timestamps with merkle trees and the ERC-7506 trusted hint registry.
+ * This class provides functionality to create, anchor, and verify timestamps using merkle trees.
+ */
 class TimestampController {
   private readonly provider: Provider;
   private readonly signer?: Signer;
@@ -54,10 +58,17 @@ class TimestampController {
   private rootHash?: string;
   private readonly contractOptions: ContractOptions;
 
+  /**
+   * Creates an instance of TimestampController.
+   * @param providerOrSigner - The provider or signer to interact with the blockchain.
+   * @param contractOptions - Options for the contract, including address, namespace, and list.
+   * @param treeOrRootOptions - Optional. Either tree options (leaves and encoding) or a root hash.
+   * @throws {TimestampControllerError} If no provider is available.
+   */
   constructor(
     providerOrSigner: ProviderOrSigner,
     contractOptions: ContractOptions,
-    treeOrRootOptions?: TreeOrRootOptions,
+    treeOrRootOptions?: TreeOrRootOptions
   ) {
     this.contractOptions = contractOptions;
 
@@ -70,19 +81,24 @@ class TimestampController {
 
     if (!this.provider) {
       throw new TimestampControllerError(
-        "A provider must be available either through the signer or explicitly passed.",
+        "A provider must be available either through the signer or explicitly passed."
       );
     }
 
     this.contract = new Contract(
       this.contractOptions.contractAddress,
       TRUSTED_HINT_REGISTRY_ABI,
-      this.signer || this.provider,
+      this.signer || this.provider
     ) as unknown as TypedContract<typeof TRUSTED_HINT_REGISTRY_ABI>;
 
     this.initializeTreeOrRoot(treeOrRootOptions);
   }
 
+  /**
+   * Initializes the merkle tree or sets the root hash based on the provided options.
+   * @param treeOrRootOptions - Either tree options or a root hash.
+   * @private
+   */
   private initializeTreeOrRoot(treeOrRootOptions?: TreeOrRootOptions): void {
     if (!treeOrRootOptions) return;
 
@@ -93,33 +109,51 @@ class TimestampController {
     }
   }
 
+  /**
+   * Creates a merkle tree from the provided leaves and encoding.
+   * @param options - Tree options containing leaves and encoding.
+   * @throws {TimestampControllerError} If merkle tree creation fails.
+   * @private
+   */
   private createMerkleTree(options: TreeOptions): void {
     try {
       this.merkleTree = StandardMerkleTree.of(
         options.leaves.map((leaf) => [leaf]),
-        options.encoding,
+        options.encoding
       );
       this.rootHash = this.merkleTree.root;
     } catch (error) {
       throw new TimestampControllerError(
-        `Failed to create merkle tree: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to create merkle tree: ${
+          error instanceof Error ? error.message : String(error)
+        }`
       );
     }
   }
 
+  /**
+   * Gets the current root hash.
+   * @returns The current root hash.
+   * @throws {TimestampControllerError} If no root hash is available.
+   */
   getRootHash(): string {
     if (!this.rootHash) {
       throw new TimestampControllerError(
-        "No root hash available. Initialize with leaves or provide a root hash.",
+        "No root hash available. Initialize with leaves or provide a root hash."
       );
     }
     return this.rootHash;
   }
 
+  /**
+   * Anchors the current root hash to the trusted hint registry.
+   * @returns A promise that resolves to the contract transaction response.
+   * @throws {TimestampControllerError} If no root hash is available or if anchoring fails.
+   */
   async anchorRootHash(): Promise<ContractTransactionResponse> {
     if (!this.rootHash) {
       throw new TimestampControllerError(
-        "No merkle tree or root hash available to anchor.",
+        "No merkle tree or root hash available to anchor."
       );
     }
 
@@ -132,19 +166,27 @@ class TimestampController {
         this.contractOptions.namespace,
         this.contractOptions.list,
         key,
-        value,
+        value
       );
     } catch (error) {
       throw new TimestampControllerError(
-        `Failed to anchor root hash: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to anchor root hash: ${
+          error instanceof Error ? error.message : String(error)
+        }`
       );
     }
   }
 
+  /**
+   * Gets the merkle proof for a given leaf value.
+   * @param value - The leaf value to get the proof for.
+   * @returns The merkle proof for the given leaf.
+   * @throws {TimestampControllerError} If no merkle tree is available.
+   */
   getMerkleProof(value: [any]): MerkleProof {
     if (!this.merkleTree) {
       throw new TimestampControllerError(
-        "No merkle tree available. Initialize with leaves to use this method.",
+        "No merkle tree available. Initialize with leaves to use this method."
       );
     }
     return {
@@ -153,33 +195,48 @@ class TimestampController {
     };
   }
 
+  /**
+   * Gets merkle proofs for all leaves in the tree.
+   * @returns An array of merkle proofs for all leaves.
+   * @throws {TimestampControllerError} If no merkle tree is available or if getting a proof fails.
+   */
   getAllMerkleProofs(): MerkleProof[] {
     if (!this.merkleTree) {
       throw new TimestampControllerError(
-        "No merkle tree available. Initialize with leaves to use this method.",
+        "No merkle tree available. Initialize with leaves to use this method."
       );
     }
     return Array.from(this.merkleTree.entries()).map(([index, [value]]) => {
       const proof = this.merkleTree?.getProof(index);
       if (!proof) {
         throw new TimestampControllerError(
-          `Failed to get proof for leaf at index ${index}`,
+          `Failed to get proof for leaf at index ${index}`
         );
       }
-      return { leaf: value, proof };
+      return { leaf: [value], proof };
     });
   }
 
+  /**
+   * Verifies a merkle proof for a given leaf.
+   * @param leaf - The leaf to verify.
+   * @param proof - The merkle proof for the leaf.
+   * @param leafCreationTime - The creation time of the leaf.
+   * @param maxTimeDifference - Optional. The maximum allowed time difference in seconds (default: 30 days).
+   * @param leafEncoding - Optional. The encoding of the leaf (default: ["string"]).
+   * @returns An object indicating whether the proof is verified and the reason if not.
+   * @throws {TimestampControllerError} If no root hash is available.
+   */
   async verifyProof(
     leaf: [any],
     proof: string[],
     leafCreationTime: Date,
     maxTimeDifference: number = 30 * 24 * 3600,
-    leafEncoding: string[] = ["string"],
+    leafEncoding: string[] = ["string"]
   ): Promise<{ verified: boolean; reason?: string }> {
     if (!this.rootHash) {
       throw new TimestampControllerError(
-        "No root hash available. Initialize with leaves or provide a root hash.",
+        "No root hash available. Initialize with leaves or provide a root hash."
       );
     }
 
@@ -207,7 +264,7 @@ class TimestampController {
       !this.isTimestampValid(
         rootHashTimestamp,
         leafCreationTime,
-        maxTimeDifference,
+        maxTimeDifference
       )
     ) {
       return { verified: false, reason: VerificationFailure.ROOT_HASH_EXPIRED };
@@ -217,31 +274,50 @@ class TimestampController {
       this.rootHash,
       leafEncoding,
       leaf,
-      proof,
+      proof
     );
     return verified
       ? { verified: true }
       : { verified: false, reason: VerificationFailure.MERKLE_PROOF_INVALID };
   }
 
+  /**
+   * Gets the HintValueChanged events for the current root hash.
+   * @returns A promise that resolves to an array of events.
+   * @private
+   */
   private async getHintValueChangedEvents() {
     const filter = this.contract.filters.HintValueChanged(
       this.contractOptions.namespace,
       this.contractOptions.list,
-      this.rootHash,
+      this.rootHash
     );
     return await this.contract.queryFilter(filter);
   }
 
+  /**
+   * Gets the block timestamp for a given event.
+   * @param event - The event to get the timestamp for.
+   * @returns A promise that resolves to the block timestamp.
+   * @private
+   */
   private async getRootHashBlockTimestamp(event: EventLog): Promise<number> {
     const block = await this.provider.getBlock(event.blockNumber);
     return block!.timestamp;
   }
 
+  /**
+   * Checks if the timestamp is valid based on the root hash timestamp and leaf creation time.
+   * @param rootHashTimestamp - The timestamp of the root hash.
+   * @param leafCreationTime - The creation time of the leaf.
+   * @param maxTimeDifference - The maximum allowed time difference in seconds.
+   * @returns True if the timestamp is valid, false otherwise.
+   * @private
+   */
   private isTimestampValid(
     rootHashTimestamp: number,
     leafCreationTime: Date,
-    maxTimeDifference: number,
+    maxTimeDifference: number
   ): boolean {
     const leafCreationTimestamp = Math.floor(leafCreationTime.getTime());
     const timeDifference = Math.abs(rootHashTimestamp - leafCreationTimestamp);
