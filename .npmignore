@@ -1,0 +1,18 @@
+# Test files
+test/
+vitest-*.config.ts
+
+# Configuration files
+.github/
+
+# Development files
+.gitignore
+.npmignore
+.env.example
+
+# Editor files
+.idea/
+.vscode/
+
+# OS generated files
+.DS_Store
