@@ -1,14 +1,8 @@
-name: Build & Test
+name: Publish Release
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-
-concurrency:
-  group: ${{ github.ref }}
-  cancel-in-progress: true
+  release:
+    types: [published]
 
 jobs:
   prepare:
@@ -51,54 +45,37 @@ jobs:
           key: timestamp${{ hashFiles('package-lock.json') }}
       - name: Build
         run: npm run build
-  unit_test:
-    needs: prepare
+  publish:
+    needs: build
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-      - name: Unpack node_modules
-        uses: actions/cache/restore@v3
-        id: cache
-        with:
-          path: node_modules
-          key: timestamp${{ hashFiles('package-lock.json') }}
-      - name: Unit Test
-        run: npm run test
-  integration_test:
-    needs: prepare
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-      - name: Unpack node_modules
-        uses: actions/cache/restore@v3
-        id: cache
-        with:
-          path: node_modules
-          key: timestamp${{ hashFiles('package-lock.json') }}
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: nightly
-      - name: Integration Test
-        run: npm run test:integration
-        env:
-          VITE_ANVIL_FORK_URL: ${{ secrets.VITE_ANVIL_FORK_URL }}
-  update_release_draft:
     permissions:
       contents: write
-      pull-requests: write
-    runs-on: ubuntu-latest
     steps:
-      - uses: release-drafter/release-drafter@v6
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v4
         with:
-          commitish: main
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+      - name: Unpack node_modules
+        uses: actions/cache/restore@v3
+        id: cache
+        with:
+          path: node_modules
+          key: timestamp${{ hashFiles('package-lock.json') }}
+      - name: Update version
+        run: |
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+            
+          VERSION=${GITHUB_REF#refs/tags/v}
+          npm version $VERSION --no-git-tag-version --allow-same-version
+            
+          git add package.json
+          git commit -m "chore(release): ${VERSION} [skip ci]"
+          git push
+      - name: Build and publish
+        run: |
+          npm run build
+          npm publish
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
