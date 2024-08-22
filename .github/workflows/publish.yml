@@ -30,7 +30,6 @@ jobs:
         with:
           path: node_modules
           key: timestamp${{ hashFiles('package-lock.json') }}
-
   update-version:
     needs: prepare
     runs-on: ubuntu-latest
@@ -47,35 +46,18 @@ jobs:
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
 
+          git fetch --all
+          git checkout main
+          git pull origin main
+
           VERSION=${GITHUB_REF#refs/tags/}
           npm version ${VERSION#v} --no-git-tag-version --allow-same-version
 
           git add package.json
           git commit -m "chore(release): ${VERSION} [skip ci]"
           git push origin main
-
-  build:
-    needs: update-version
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: main
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-      - name: Unpack node_modules
-        uses: actions/cache/restore@v3
-        id: cache
-        with:
-          path: node_modules
-          key: timestamp${{ hashFiles('package-lock.json') }}
-      - name: Build
-        run: npm run build
-
   publish:
-    needs: build
+    needs: update-version
     runs-on: ubuntu-latest
     permissions:
       contents: write
