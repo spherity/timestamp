@@ -3,8 +3,8 @@ import { FORK_BLOCK_NUMBER, FORK_URL } from "./utils";
 
 export default async function () {
   return await startProxy({
-    port: 8545, // By default, the proxy will listen on port 8545.
-    host: "::", // By default, the proxy will listen on all interfaces.
+    port: 8545,
+    host: "::",
     options: {
       chainId: 11155111,
       forkUrl: FORK_URL,

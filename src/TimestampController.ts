@@ -148,13 +148,7 @@ class TimestampController {
    * @throws {TimestampControllerError} If no root hash is available or if anchoring fails.
    */
   async anchorRootHash(): Promise<ContractTransactionResponse> {
-    if (!this.rootHash) {
-      throw new TimestampControllerError(
-        "No merkle tree or root hash available to anchor."
-      );
-    }
-
-    const key = this.rootHash;
+    const key = this.getRootHash();
     const value =
       "0x1000000000000000000000000000000000000000000000000000000000000000";
 
@@ -183,7 +177,7 @@ class TimestampController {
   getMerkleProof(leaf: [any]): MerkleProof {
     if (!this.merkleTree) {
       throw new TimestampControllerError(
-        "No merkle tree available. Initialize with leaves to use this method."
+        "No merkle tree available to generate proof"
       );
     }
     return {
@@ -200,7 +194,7 @@ class TimestampController {
   getAllMerkleProofs(): MerkleProof[] {
     if (!this.merkleTree) {
       throw new TimestampControllerError(
-        "No merkle tree available. Initialize with leaves to use this method."
+        "No merkle tree available to generate proofs"
       );
     }
     return Array.from(this.merkleTree.entries()).map(([index, [value]]) => {
@@ -228,14 +222,10 @@ class TimestampController {
     leaf: [any],
     proof: string[],
     leafCreationTime: Date,
-    maxTimeDifference: number = 30 * 24 * 3600,
+    maxTimeDifference: number,
     leafEncoding: string[] = ["string"]
   ): Promise<{ verified: boolean; reason?: string }> {
-    if (!this.rootHash) {
-      throw new TimestampControllerError(
-        "No root hash available. Initialize with leaves or provide a root hash."
-      );
-    }
+    const rootHash = this.getRootHash();
 
     const events = await this.getHintValueChangedEvents();
     if (events.length === 0) {
@@ -268,7 +258,7 @@ class TimestampController {
     }
 
     const verified = StandardMerkleTree.verify(
-      this.rootHash,
+      rootHash,
       leafEncoding,
       leaf,
       proof
@@ -297,10 +287,16 @@ class TimestampController {
    * @param event - The event to get the timestamp for.
    * @returns A promise that resolves to the block timestamp.
    * @private
+   * @throws {TimestampControllerError} If no timestamp can be retrieved
    */
   private async getRootHashBlockTimestamp(event: EventLog): Promise<number> {
     const block = await this.provider.getBlock(event.blockNumber);
-    return block!.timestamp;
+    if (!block?.timestamp) {
+      throw new TimestampControllerError(
+        `Failed to get block timestamp for event transaction ${event.transactionHash}`
+      );
+    }
+    return block.timestamp;
   }
 
   /**
