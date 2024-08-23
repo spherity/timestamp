@@ -60,10 +60,13 @@ describe("TimestampController (Integration)", () => {
       .then((block) => block!.timestamp);
     await controller.anchorRootHash();
     const proof = controller.getMerkleProof(["data1"]);
+    const leafCreationTime = new Date(currentBlockTime);
+    const maxTimeDifference = 30 * 24 * 3600;
     const verified = await controller.verifyProof(
       proof.leaf,
       proof.proof,
-      new Date(currentBlockTime)
+      leafCreationTime,
+      maxTimeDifference
     );
 
     expect(proof).toBeDefined();
@@ -76,12 +79,15 @@ describe("TimestampController (Integration)", () => {
       .then((block) => block!.timestamp);
     await controller.anchorRootHash();
     const proofs = controller.getAllMerkleProofs();
+    const leafCreationTime = new Date(currentBlockTime);
+    const maxTimeDifference = 30 * 24 * 3600;
     const verified = await Promise.all(
       proofs.map((proof) =>
         controller.verifyProof(
           proof.leaf,
           proof.proof,
-          new Date(currentBlockTime)
+          leafCreationTime,
+          maxTimeDifference
         )
       )
     );
@@ -94,10 +100,13 @@ describe("TimestampController (Integration)", () => {
   it("should fail to verify wrong proof", async () => {
     await controller.anchorRootHash();
     const proof = controller.getMerkleProof(["data1"]);
+    const leafCreationTime = new Date();
+    const maxTimeDifference = 30 * 24 * 3600;
     const verified = await controller.verifyProof(
       ["data2"],
       proof.proof,
-      new Date()
+      leafCreationTime,
+      maxTimeDifference
     );
 
     expect(proof).toBeDefined();
@@ -106,10 +115,13 @@ describe("TimestampController (Integration)", () => {
 
   it("should fail to verify proof for non-anchored root hash", async () => {
     const proof = controller.getMerkleProof(["data1"]);
+    const leafCreationTime = new Date();
+    const maxTimeDifference = 30 * 24 * 3600;
     const verified = await controller.verifyProof(
       proof.leaf,
       proof.proof,
-      new Date()
+      leafCreationTime,
+      maxTimeDifference
     );
 
     expect(proof).toBeDefined();
