@@ -266,11 +266,14 @@ describe("TimestampController", () => {
           "0x1234567890123456789012345678901234567890123456789012345678901234",
       }
     );
+    const leafCreationTime = new Date(CURRENT_BLOCK_TIMESTAMP);
+    const maxTimeDifference = 30 * 24 * 3600;
 
     const result = await controller.verifyProof(
       ["leaf1"],
       ["proof1", "proof2"],
-      new Date(CURRENT_BLOCK_TIMESTAMP)
+      leafCreationTime,
+      maxTimeDifference
     );
 
     expect(result).toEqual({ verified: true });
@@ -301,7 +304,8 @@ describe("TimestampController", () => {
     const result = await controller.verifyProof(
       ["leaf1"],
       ["proof1", "proof2"],
-      new Date()
+      new Date(),
+      30 * 24 * 3600
     );
 
     expect(result).toEqual({
@@ -380,7 +384,7 @@ describe("TimestampController", () => {
     );
 
     await expect(controller.anchorRootHash()).rejects.toThrow(
-      "No merkle tree or root hash available to anchor."
+      "No root hash available. Initialize with leaves or provide a root hash."
     );
   });
 
@@ -471,7 +475,12 @@ describe("TimestampController", () => {
     });
 
     await expect(
-      controller.verifyProof(["leaf1"], ["proof1", "proof2"], new Date())
+      controller.verifyProof(
+        ["leaf1"],
+        ["proof1", "proof2"],
+        new Date(),
+        30 * 24 * 3600
+      )
     ).rejects.toThrow(TimestampControllerError);
   });
 
@@ -529,53 +538,20 @@ describe("TimestampController", () => {
           "0x1234567890123456789012345678901234567890123456789012345678901234",
       }
     );
+    const leafCreationTime = new Date(CURRENT_BLOCK_TIMESTAMP);
+    const maxTimeDifference = 30 * 24 * 3600;
 
     const result = await controller.verifyProof(
       ["leaf1"],
       ["proof1", "proof2"],
-      new Date(CURRENT_BLOCK_TIMESTAMP)
+      leafCreationTime,
+      maxTimeDifference
     );
 
     expect(result).toEqual({
       verified: false,
       reason: VerificationFailure.MERKLE_PROOF_INVALID,
     });
-  });
-
-  it("should use default maxTimeDifference when not provided", async () => {
-    vi.mocked(StandardMerkleTree.verify).mockReturnValue(true);
-    vi.mocked(mockContract.queryFilter).mockResolvedValue([
-      {
-        args: {
-          value:
-            "0x1000000000000000000000000000000000000000000000000000000000000000",
-        },
-      },
-    ] as unknown as EventLog[]);
-    vi.mocked(mockProvider.getBlock).mockResolvedValue({
-      timestamp: Date.now(),
-    } as any);
-
-    const controller = new TimestampController(
-      mockProvider,
-      {
-        contractAddress: "0x0000000000000000000000000000000000000000",
-        namespace: "testNamespace",
-        list: "testList",
-      },
-      {
-        rootHash:
-          "0x1234567890123456789012345678901234567890123456789012345678901234",
-      }
-    );
-
-    const result = await controller.verifyProof(
-      ["leaf1"],
-      ["proof1", "proof2"],
-      new Date()
-    );
-
-    expect(result).toEqual({ verified: true });
   });
 
   it("should use custom leafEncoding when provided", async () => {
@@ -615,6 +591,56 @@ describe("TimestampController", () => {
       ["bytes32"],
       ["leaf1"],
       ["proof1", "proof2"]
+    );
+  });
+
+  it("should throw an error when block timestamp is not available", async () => {
+    vi.mocked(mockContract.queryFilter).mockResolvedValue([
+      {
+        args: {
+          value:
+            "0x1000000000000000000000000000000000000000000000000000000000000000",
+        },
+        blockNumber: 12345,
+        transactionHash: "0xabcdef1234567890",
+      },
+    ] as unknown as EventLog[]);
+
+    vi.mocked(mockProvider.getBlock).mockResolvedValue({
+      timestamp: undefined,
+    } as any);
+
+    const controller = new TimestampController(
+      mockProvider,
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
+      {
+        rootHash:
+          "0x1234567890123456789012345678901234567890123456789012345678901234",
+      }
+    );
+
+    await expect(
+      controller.verifyProof(
+        ["leaf1"],
+        ["proof1", "proof2"],
+        new Date(),
+        30 * 24 * 3600
+      )
+    ).rejects.toThrow(TimestampControllerError);
+
+    await expect(
+      controller.verifyProof(
+        ["leaf1"],
+        ["proof1", "proof2"],
+        new Date(),
+        30 * 24 * 3600
+      )
+    ).rejects.toThrow(
+      "Failed to get block timestamp for event transaction 0xabcdef1234567890"
     );
   });
 });
