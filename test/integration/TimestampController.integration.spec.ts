@@ -131,4 +131,51 @@ describe("TimestampController (Integration)", () => {
   it("should fail to get proof for non-existent leaf", () => {
     expect(() => controller.getMerkleProof(["non-existent-data"])).toThrow();
   });
+
+  it("should successfully add new leaves, anchor the new root hash, and verify proofs", async () => {
+    // Add new leaves
+    const newLeaves = [["data4"], ["data5"]];
+    controller.addLeaves(newLeaves);
+
+    // Get the new root hash after adding leaves
+    const newRootHash = controller.getRootHash();
+
+    // Anchor the new root hash
+    const tx = await controller.anchorRootHash();
+    await tx.wait(); // Wait for the transaction to be mined
+
+    // Verify that the correct root hash was anchored
+    const anchoredHintValue = await hintRegistry.getHint(
+      namespace,
+      list,
+      newRootHash
+    );
+
+    expect(anchoredHintValue).toBe(
+      "0x1000000000000000000000000000000000000000000000000000000000000000"
+    );
+
+    // Get the current block time for leaf creation time
+    const currentBlockTime = await provider
+      .getBlock("latest")
+      .then((block) => block!.timestamp);
+    const leafCreationTime = new Date(currentBlockTime); // Convert to milliseconds
+    const maxTimeDifference = 30 * 24 * 3600; // 30 days in seconds
+
+    const allProofs = controller.getAllMerkleProofs();
+    expect(allProofs.length).toBe(leaves.length + newLeaves.length);
+
+    const allVerified = await Promise.all(
+      allProofs.map((proof) =>
+        controller.verifyProof(
+          proof.leaf,
+          proof.proof,
+          leafCreationTime,
+          maxTimeDifference
+        )
+      )
+    );
+
+    expect(allVerified.every((v) => v.verified)).toBe(true);
+  });
 });

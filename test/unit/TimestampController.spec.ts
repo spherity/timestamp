@@ -643,4 +643,108 @@ describe("TimestampController", () => {
       "Failed to get block timestamp for event transaction 0xabcdef1234567890"
     );
   });
+
+  it("should add new leaves to the existing Merkle tree", () => {
+    const initialLeaves = [["data1"], ["data2"]];
+    const newLeaves = [["data3"], ["data4"]];
+    const allLeaves = [...initialLeaves, ...newLeaves];
+
+    vi.mocked(StandardMerkleTree.of).mockReturnValueOnce({
+      root: "0x1234567890123456789012345678901234567890123456789012345678901234",
+      getProof: vi.fn().mockReturnValue(["proof1", "proof2"]),
+      entries: vi.fn().mockReturnValue([
+        [0, ["data1"]],
+        [1, ["data2"]],
+      ]),
+    } as unknown as StandardMerkleTree<any[]>);
+
+    const controller = new TimestampController(
+      mockProvider,
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
+      { leaves: initialLeaves, encoding: ["string"] }
+    );
+
+    expect(StandardMerkleTree.of).toHaveBeenCalledWith(initialLeaves, [
+      "string",
+    ]);
+    expect(controller.getRootHash()).toBe(
+      "0x1234567890123456789012345678901234567890123456789012345678901234"
+    );
+
+    vi.mocked(StandardMerkleTree.of).mockClear();
+    vi.mocked(StandardMerkleTree.of).mockReturnValueOnce({
+      root: "0x9876543210987654321098765432109876543210987654321098765432109876",
+      getProof: vi
+        .fn()
+        .mockReturnValue(["proof1", "proof2", "proof3", "proof4"]),
+      entries: vi.fn().mockReturnValue([
+        [0, ["data1"]],
+        [1, ["data2"]],
+        [2, ["data3"]],
+        [3, ["data4"]],
+      ]),
+    } as unknown as StandardMerkleTree<any[]>);
+
+    controller.addLeaves(newLeaves);
+
+    expect(StandardMerkleTree.of).toHaveBeenCalledWith(allLeaves, ["string"]);
+
+    expect(controller.getRootHash()).toBe(
+      "0x9876543210987654321098765432109876543210987654321098765432109876"
+    );
+  });
+
+  it("should throw an error when trying to add leaves without an initialized Merkle tree", () => {
+    const controller = new TimestampController(
+      mockProvider,
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
+      { rootHash: "0x1234" }
+    );
+
+    expect(() => controller.addLeaves([["newData"]])).toThrow(
+      "No merkle tree available. Initialize with leaves first."
+    );
+  });
+
+  it("should maintain the correct encoding when adding new leaves", () => {
+    const initialLeaves = [
+      ["0x1111", "5000000000000000000"],
+      ["0x2222", "2500000000000000000"],
+    ];
+    const newLeaves = [["0x3333", "1000000000000000000"]];
+    const allLeaves = [...initialLeaves, ...newLeaves];
+
+    vi.mocked(StandardMerkleTree.of).mockReturnValue({
+      root: "0x1234",
+      getProof: vi.fn(),
+      entries: vi.fn().mockReturnValue(initialLeaves.entries()),
+    } as unknown as StandardMerkleTree<any[]>);
+
+    const controller = new TimestampController(
+      mockProvider,
+      {
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        namespace: "testNamespace",
+        list: "testList",
+      },
+      { leaves: initialLeaves, encoding: ["address", "uint256"] }
+    );
+
+    vi.mocked(StandardMerkleTree.of).mockClear();
+
+    controller.addLeaves(newLeaves);
+
+    expect(StandardMerkleTree.of).toHaveBeenCalledWith(allLeaves, [
+      "address",
+      "uint256",
+    ]);
+  });
 });
