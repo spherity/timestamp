@@ -56,6 +56,7 @@ class TimestampController {
   private readonly contract: TypedContract<typeof TRUSTED_HINT_REGISTRY_ABI>;
   private merkleTree?: StandardMerkleTree<any[]>;
   private rootHash?: string;
+  private encoding: string[];
   private readonly contractOptions: ContractOptions;
 
   /**
@@ -117,6 +118,7 @@ class TimestampController {
    */
   private createMerkleTree(options: TreeOptions): void {
     try {
+      this.encoding = options.encoding;
       this.merkleTree = StandardMerkleTree.of(options.leaves, options.encoding);
       this.rootHash = this.merkleTree.root;
     } catch (error) {
@@ -315,6 +317,39 @@ class TimestampController {
     const leafCreationTimestamp = Math.floor(leafCreationTime.getTime());
     const timeDifference = Math.abs(rootHashTimestamp - leafCreationTimestamp);
     return timeDifference <= maxTimeDifference;
+  }
+
+  /**
+   * Adds new leaves to the existing Merkle tree.
+   * @param newLeaves - An array of new leaves to add to the tree.
+   * @throws {TimestampControllerError} If no Merkle tree is available or if adding leaves fails.
+   */
+  addLeaves(newLeaves: any[]): void {
+    if (!this.merkleTree) {
+      throw new TimestampControllerError(
+        "No Merkle tree available. Initialize with leaves first."
+      );
+    }
+
+    try {
+      const currentLeaves = Array.from(this.merkleTree.entries()).map(
+        ([, value]) => value
+      );
+
+      const updatedLeaves = [...currentLeaves, ...newLeaves];
+
+      // Recreate the Merkle tree with updated leaves
+      this.createMerkleTree({
+        leaves: updatedLeaves,
+        encoding: this.encoding,
+      });
+    } catch (error) {
+      throw new TimestampControllerError(
+        `Failed to add leaves to Merkle tree: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
   }
 }
 
