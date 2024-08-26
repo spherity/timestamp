@@ -56,7 +56,7 @@ class TimestampController {
   private readonly contract: TypedContract<typeof TRUSTED_HINT_REGISTRY_ABI>;
   private merkleTree?: StandardMerkleTree<any[]>;
   private rootHash?: string;
-  private encoding: string[];
+  private encoding?: string[];
   private readonly contractOptions: ContractOptions;
 
   /**
@@ -327,7 +327,12 @@ class TimestampController {
   addLeaves(newLeaves: any[]): void {
     if (!this.merkleTree) {
       throw new TimestampControllerError(
-        "No Merkle tree available. Initialize with leaves first."
+        "No merkle tree available. Initialize with leaves first."
+      );
+    }
+    if (!this.encoding) {
+      throw new TimestampControllerError(
+        "No encoding was provided to extend the merkle tree."
       );
     }
 

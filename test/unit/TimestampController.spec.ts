@@ -710,7 +710,7 @@ describe("TimestampController", () => {
     );
 
     expect(() => controller.addLeaves([["newData"]])).toThrow(
-      "No Merkle tree available. Initialize with leaves first."
+      "No merkle tree available. Initialize with leaves first."
     );
   });
 
